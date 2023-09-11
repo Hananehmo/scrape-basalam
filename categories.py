@@ -4,6 +4,16 @@ import requests
 from bs4 import BeautifulSoup, Tag
 
 
+class Category:
+    def __init__(self, categories, subcategories):
+        self.categories = categories
+        self.subcategories = subcategories
+        self.final_categories = None
+
+    def pass_final_categories(self, element):
+        self.final_categories = element
+
+
 def find_category():
     def check_and_write_in_arr(text: str, arr):
         if text.startswith("/category"):
