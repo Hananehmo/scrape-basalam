@@ -22,3 +22,7 @@ def find_category():
             continue
         specific_links.append(link['href'])
         check_and_write_in_arr(link['href'], categories)
+    for element in categories:
+        new_array = [element]
+        new_arrays.append(new_array)
+    return new_arrays
