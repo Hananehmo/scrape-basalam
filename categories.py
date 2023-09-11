@@ -39,10 +39,14 @@ def find_category():
 
 
 def find_subcategory(new_arrays):
-    def check_and_write(text: str, arr):
+    def check_and_write(text: str, arr, category):
         if text.startswith("/subcategory"):
-            arr.append("https://basalam.com" + text)
+            link = "https://basalam.com" + text
+            subcategory = Category(category, link)
+            arr.append(subcategory)
+        return arr
 
+    res = []
     for j in range(len(new_arrays)):
         url = new_arrays[j][0]
         response = requests.get(url)
@@ -54,4 +58,8 @@ def find_subcategory(new_arrays):
             if link['href'] in specific_links:
                 continue
             specific_links.append(link['href'])
-            check_and_write(link['href'], new_arrays[j])
+            res = check_and_write(link['href'], res, new_arrays[j][0])
+    # for category_obj in res:
+    #     print(f'{category_obj.categories}{", "}{category_obj.subcategories}')
+    #     print()
+    return res
