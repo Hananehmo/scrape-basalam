@@ -63,3 +63,33 @@ def find_subcategory(new_arrays):
     #     print(f'{category_obj.categories}{", "}{category_obj.subcategories}')
     #     print()
     return res
+
+
+def find_under_subcategory(subcats: List):
+    def check_and_write(text: str, res_inner: List, result: List) -> List:
+        if text.startswith("/search/subcategory"):
+            link = "https://basalam.com" + text
+            final_categories = Category(res_inner.categories, res_inner.subcategories)
+            final_categories.pass_final_categories(link)
+            result.append(final_categories)
+        return result
+
+    elec_device = Category('https://basalam.com/category/electronic-devices', 'https://basalam.com/category'
+                                                                              '/electronic-devices')
+    subcats.append(elec_device)
+    result = []
+    for i in range(len(subcats)):
+        url = subcats[i].subcategories
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        links: List[Tag] = soup.find_all('a')
+        specific_links = []
+        for link in links:
+            if link['href'] in specific_links:
+                continue
+            specific_links.append(link['href'])
+            result = check_and_write(link['href'], subcats[i], result)
+    # for obj in result:
+    #     print(f'{obj.categories}{", "}{obj.subcategories}{", "}{obj.final_categories}')
+    #     print()
+    return result
