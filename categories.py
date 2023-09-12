@@ -59,9 +59,6 @@ def find_subcategory(new_arrays):
                 continue
             specific_links.append(link['href'])
             res = check_and_write(link['href'], res, new_arrays[j][0])
-    # for category_obj in res:
-    #     print(f'{category_obj.categories}{", "}{category_obj.subcategories}')
-    #     print()
     return res
 
 
@@ -89,7 +86,36 @@ def find_under_subcategory(subcats: List):
                 continue
             specific_links.append(link['href'])
             result = check_and_write(link['href'], subcats[i], result)
-    # for obj in result:
-    #     print(f'{obj.categories}{", "}{obj.subcategories}{", "}{obj.final_categories}')
-    #     print()
     return result
+
+
+def find_products(finalcats: List):
+    def check_and_write(text: str, ress, arrs):
+        if "/product" in text:
+            product_link = "https://basalam.com" + text
+            product = Category(ress.categories, ress.subcategories)
+            product.pass_product(product_link)
+            arrs.append(product)
+        return arrs
+
+    final_res = []
+    for i in range(len(finalcats)):
+        url = finalcats[i].final_categories
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        links: List[Tag] = soup.find_all('a')
+        specific_links = []
+        for link in links:
+            if 'href' not in link.attrs:
+
+                if link['href'] in specific_links:
+                    continue
+                specific_links.append(link['href'])
+                final_res = check_and_write(link['href'], finalcats[i], final_res)
+            if not specific_links:
+                break
+
+    for res_obj in final_res:
+        print(
+            f'{res_obj.categories}{", "}{res_obj.subcategories}{", "}{res_obj.final_categories}{", "}{res_obj.prodect}')
+        print()
