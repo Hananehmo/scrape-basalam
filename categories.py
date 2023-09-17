@@ -144,7 +144,4 @@ def find_products_and_images(finalcats: List[str]):
                     break
 
 
-new_arrays = find_category()
-res = find_subcategory(new_arrays)
-res = find_under_subcategory(res)
-find_products_and_images(res)
+
