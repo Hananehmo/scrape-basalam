@@ -89,33 +89,40 @@ def find_under_subcategory(subcats: List):
     return result
 
 
-def find_products(finalcats: List):
-    def check_and_write(text: str, ress, arrs):
+def find_products(finalcats: List[str]):
+    def check_and_write(text: str, ress, arrs, product_file):
         if "/product" in text:
             product_link = "https://basalam.com" + text
             product = Category(ress.categories, ress.subcategories)
+            product.pass_final_categories(ress.final_categories)
             product.pass_product(product_link)
             arrs.append(product)
+            # product_file.write(f'{product.categories}, {product.subcategories}, {product.final_categories}, {product.product}\n')
         return arrs
 
+    print(finalcats)
     final_res = []
-    for i in range(len(finalcats)):
-        url = finalcats[i].final_categories
-        response = requests.get(url)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        links: List[Tag] = soup.find_all('a')
-        specific_links = []
-        for link in links:
-            if 'href' not in link.attrs:
+    with open("products.txt", 'a') as file:
+        for i in range(len(finalcats)):
+            url = finalcats[i].final_categories
+            # page_number = 1
+            for p in range(1, 250):
+                response = requests.get(url + f'?page={p}')
+                # print(url + f'?page={p}' + str(response))
+                soup = BeautifulSoup(response.text, 'html.parser')
+                links: List[Tag] = soup.select('a')
+                specific_links = []
+                for link in links:
+                    if 'href' in link.attrs:
+                        if link['href'] in specific_links:
+                            continue
+                        specific_links.append(link['href'])
+                        final_res = check_and_write(link['href'], finalcats[i], final_res, file)
+                # next_page_link = soup.find('a', class_='next')
+                # if not next_page_link:
+                #     break
+                if response == 204:
+                    print('page not found!!')
+                    break
 
-                if link['href'] in specific_links:
-                    continue
-                specific_links.append(link['href'])
-                final_res = check_and_write(link['href'], finalcats[i], final_res)
-            if not specific_links:
-                break
-
-    for res_obj in final_res:
-        print(
-            f'{res_obj.categories}{", "}{res_obj.subcategories}{", "}{res_obj.final_categories}{", "}{res_obj.prodect}')
-        print()
+    return final_res
