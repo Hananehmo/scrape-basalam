@@ -1,6 +1,18 @@
+import sqlite3
 from typing import List
 import requests
 from bs4 import BeautifulSoup, Tag
+
+conn = sqlite3.connect('data.db')
+c = conn.cursor()
+c.execute('''CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                categories TEXT,
+                subcategories TEXT,
+                final_categories TEXT,
+                product TEXT,
+                image TEXT
+            )''')
 
 
 class Category:
@@ -118,7 +130,11 @@ def find_products_and_images(finalcats: List[str]):
                 if img_link.endswith(("_512X512X70.jpg", "_50X50X70.jpg", ".png", "_512X512X70.jpeg", "_50X50X70.jpeg")):
                     product.pass_image(img_link)
             arrs.append(product)
-            product_file.write(f'{product.categories}, {product.subcategories}, {product.final_categories}, {product.product}, {product.image}\n')
+            # product_file.write(f'{product.categories}, {product.subcategories}, {product.final_categories}, {product.product}, {product.image}\n')
+            c.execute('''INSERT INTO products (categories, subcategories, final_categories, product, image)
+                            VALUES (?, ?, ?, ?, ?)''', (product.categories, product.subcategories, product.final_categories, product.product, ', '.join(product.image)))
+            conn.commit()
+        # conn.close()
         return arrs
 
     print(finalcats)
@@ -142,6 +158,5 @@ def find_products_and_images(finalcats: List[str]):
                 if response.status_code == 204:
                     print(url + f'?page={p}' + ' not found!!')
                     break
-
-
+    conn.close()
 
