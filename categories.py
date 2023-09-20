@@ -1,18 +1,14 @@
+import re
 import sqlite3
+from datetime import time
 from typing import List
 import requests
 from bs4 import BeautifulSoup, Tag
 
-conn = sqlite3.connect('data.db')
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                categories TEXT,
-                subcategories TEXT,
-                final_categories TEXT,
-                product TEXT,
-                image TEXT
-            )''')
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36'
+HEADERS = {
+    'User-Agent': USER_AGENT,
+}
 
 
 class Category:
@@ -44,7 +40,7 @@ def find_category():
         return arr
 
     url = "https://basalam.com"
-    response = requests.get(url)
+    response = requests.get(url, headers=HEADERS, verify=False)
     soup = BeautifulSoup(response.text, 'html.parser')
     links: List[Tag] = soup.find_all('a')
     specific_links = []
@@ -73,7 +69,7 @@ def find_subcategory(cats):
     res = []
     for j in range(len(cats)):
         url = cats[j][0]
-        response = requests.get(url)
+        response = requests.get(url, headers=HEADERS, verify=False)
         soup = BeautifulSoup(response.text, 'html.parser')
 
         links: List[Tag] = soup.find_all('a')
@@ -101,7 +97,7 @@ def find_under_subcategory(subcats: List):
     result = []
     for i in range(len(subcats)):
         url = subcats[i].subcategories
-        response = requests.get(url)
+        response = requests.get(url, headers=HEADERS, verify=False)
         soup = BeautifulSoup(response.text, 'html.parser')
         links: List[Tag] = soup.find_all('a')
         specific_links = []
@@ -111,52 +107,86 @@ def find_under_subcategory(subcats: List):
                     continue
                 specific_links.append(link['href'])
                 result = check_and_write(link['href'], subcats[i], result)
-    for r in result:
-        print(f'{r.categories}, {r.subcategories}, {r.final_categories}')
+    # for r in result:
+    #     print(f'{r.categories}, {r.subcategories}, {r.final_categories}')
     return result
 
 
 def find_products_and_images(finalcats: List[str]):
-    def check_and_write(text: str, ress, arrs, product_file):
+    connection = sqlite3.connect('basalam_data.db')
+    cursor = connection.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS products (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    categories TEXT,
+                    subcategories TEXT,
+                    final_categories TEXT,
+                    product TEXT,
+                    image TEXT
+                )''')
+
+    cursor.execute("SELECT * FROM products ORDER BY id DESC LIMIT 1")
+    last_row = cursor.fetchone()
+
+    def check_and_write(text: str, ress, arrs):
         if "/product" in text:
             product_link = "https://basalam.com" + text
-            product = Category(ress.categories, ress.subcategories)
-            product.pass_final_categories(ress.final_categories)
-            product.pass_product(product_link)
-            img_response = requests.get(product_link)
-            img_soup = BeautifulSoup(img_response.content, "html.parser")
-            image_links = [img["src"] for img in img_soup.find_all("img")]
-            for img_link in image_links:
-                if img_link.endswith(("_512X512X70.jpg", "_50X50X70.jpg", ".png", "_512X512X70.jpeg", "_50X50X70.jpeg")):
-                    product.pass_image(img_link)
-            arrs.append(product)
-            # product_file.write(f'{product.categories}, {product.subcategories}, {product.final_categories}, {product.product}, {product.image}\n')
-            c.execute('''INSERT INTO products (categories, subcategories, final_categories, product, image)
-                            VALUES (?, ?, ?, ?, ?)''', (product.categories, product.subcategories, product.final_categories, product.product, ', '.join(product.image)))
-            conn.commit()
-        # conn.close()
+            cursor.execute("SELECT COUNT(*) FROM products WHERE product = ?", (product_link,))
+            count = cursor.fetchone()[0]
+            if count == 0:
+                product = Category(ress.categories, ress.subcategories)
+                product.pass_final_categories(ress.final_categories)
+                product.pass_product(product_link)
+                img_response = requests.get(product_link, headers=HEADERS, verify=False)
+                img_soup = BeautifulSoup(img_response.content, "html.parser")
+                image_links = [img["src"] for img in img_soup.find_all("img")]
+                for img_link in image_links:
+                    if img_link.endswith(("_512X512X70.jpg", "_50X50X70.jpg", ".png", "_512X512X70.jpeg", "_50X50X70.jpeg")):
+                        product.pass_image(img_link)
+                arrs.append(product)
+                cursor.execute('''INSERT INTO products (categories, subcategories, final_categories, product, image)
+                                VALUES (?, ?, ?, ?, ?)''', (product.categories, product.subcategories, product.final_categories, product.product, ', '.join(product.image)))
+                connection.commit()
+
+            if last_row:
+                for row in cursor.execute("SELECT * FROM products WHERE id >= ? ORDER BY id", (last_row[0],)):
+                    product = Category(row[1], row[2])
+                    product.pass_final_categories(row[3])
+                    product.pass_product(row[4])
+                    product.pass_image(row[5].split(", "))
+                    arrs.append(product)
+
         return arrs
 
-    print(finalcats)
     final_res = []
-    with open("all links.txt", 'a') as file:
-        for i in range(len(finalcats)):
-            url = finalcats[i].final_categories
-            # page_number = 1
-            for p in range(1, 250):
-                response = requests.get(url + f'?page={p}')
-                # print(url + f'?page={p}' + str(response))
-                soup = BeautifulSoup(response.text, 'html.parser')
-                links: List[Tag] = soup.select('a')
-                specific_links = []
-                for link in links:
-                    if 'href' in link.attrs:
-                        if link['href'] in specific_links:
-                            continue
-                        specific_links.append(link['href'])
-                        final_res = check_and_write(link['href'], finalcats[i], final_res, file)
-                if response.status_code == 204:
-                    print(url + f'?page={p}' + ' not found!!')
-                    break
-    conn.close()
+    for i in range(len(finalcats)):
+        url = finalcats[i].final_categories
+        for p in range(1, 250):
+            while True:
+                try:
+                    response = requests.get(url + f'?page={p}', headers=HEADERS, verify=False)
+                    print(url + f'?page={p}' + str(response))
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    links = soup.select('a')
+                    specific_links = []
+                    for link in links:
+                        if 'href' in link.attrs:
+                            if link['href'] in specific_links:
+                                continue
+                            specific_links.append(link['href'])
+                            final_res = check_and_write(link['href'], finalcats[i], final_res)
+                    if response.status_code == 204:
+                        print(url + f'?page={p}' + ' not found!!')
+                        break
+                except requests.exceptions.ConnectionError:
+                    print("Connection error occurred. Retrying...")
+                    time.sleep(1.5)
+                break
 
+    connection.close()
+    return final_res
+
+
+category = find_category()
+subcategory = find_subcategory(category)
+finalcat = find_under_subcategory(subcategory)
+find_products_and_images(finalcat)
