@@ -1,6 +1,7 @@
 import re
 import sqlite3
-from datetime import time
+import time
+from time import sleep
 from typing import List
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -143,17 +144,18 @@ def find_products_and_images(finalcats: List[str]):
                     if img_link.endswith(("_512X512X70.jpg", "_50X50X70.jpg", ".png", "_512X512X70.jpeg", "_50X50X70.jpeg")):
                         product.pass_image(img_link)
                 arrs.append(product)
-                cursor.execute('''INSERT INTO products (categories, subcategories, final_categories, product, image)
-                                VALUES (?, ?, ?, ?, ?)''', (product.categories, product.subcategories, product.final_categories, product.product, ', '.join(product.image)))
+                cursor.execute('''INSERT OR IGNORE INTO products (categories, subcategories, final_categories, product, image)
+                                            VALUES (?, ?, ?, ?, ?)''',
+                               (product.categories, product.subcategories, product.final_categories, product.product, ', '.join(product.image)))
                 connection.commit()
 
-            if last_row:
-                for row in cursor.execute("SELECT * FROM products WHERE id >= ? ORDER BY id", (last_row[0],)):
-                    product = Category(row[1], row[2])
-                    product.pass_final_categories(row[3])
-                    product.pass_product(row[4])
-                    product.pass_image(row[5].split(", "))
-                    arrs.append(product)
+        if last_row:
+            for row in cursor.execute("SELECT * FROM products WHERE id > ? ORDER BY id", (last_row[0],)):
+                product = Category(row[1], row[2])
+                product.pass_final_categories(row[3])
+                product.pass_product(row[4])
+                product.pass_image(row[5].split(", "))
+                arrs.append(product)
 
         return arrs
 
@@ -177,7 +179,7 @@ def find_products_and_images(finalcats: List[str]):
                     if response.status_code == 204:
                         print(url + f'?page={p}' + ' not found!!')
                         break
-                except requests.exceptions.ConnectionError:
+                except ConnectionError:
                     print("Connection error occurred. Retrying...")
                     time.sleep(1.5)
                 break
