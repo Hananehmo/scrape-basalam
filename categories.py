@@ -1,16 +1,17 @@
-import re
 import sqlite3
 import time
-from time import sleep
 from typing import List
 import requests
 from bs4 import BeautifulSoup, Tag
+import threading
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36'
 HEADERS = {
     'User-Agent': USER_AGENT,
 }
 
+# Create a lock for thread synchronization
+lock = threading.Lock()
 
 class Category:
     def __init__(self, categories, subcategories):
@@ -56,6 +57,8 @@ def find_category():
     for element in categories:
         new_array = [element]
         new_arrays.append(new_array)
+    # for arr in new_arrays:
+    #     print(arr)
     return new_arrays
 
 
@@ -69,7 +72,8 @@ def find_subcategory(cats):
 
     res = []
     for j in range(len(cats)):
-        url = cats[j][0]
+        url = cats[j]
+        # print(url)
         response = requests.get(url, headers=HEADERS, verify=False)
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -80,7 +84,7 @@ def find_subcategory(cats):
                 if link['href'] in specific_links:
                     continue
                 specific_links.append(link['href'])
-                res = check_and_write(link['href'], res, cats[j][0])
+                res = check_and_write(link['href'], res, cats[j])
     return res
 
 
@@ -98,6 +102,7 @@ def find_under_subcategory(subcats: List):
     result = []
     for i in range(len(subcats)):
         url = subcats[i].subcategories
+        # print(url)
         response = requests.get(url, headers=HEADERS, verify=False)
         soup = BeautifulSoup(response.text, 'html.parser')
         links: List[Tag] = soup.find_all('a')
@@ -108,13 +113,12 @@ def find_under_subcategory(subcats: List):
                     continue
                 specific_links.append(link['href'])
                 result = check_and_write(link['href'], subcats[i], result)
-    # for r in result:
-    #     print(f'{r.categories}, {r.subcategories}, {r.final_categories}')
+
     return result
 
 
 def find_products_and_images(finalcats: List[str]):
-    connection = sqlite3.connect('basalam_data.db')
+    connection = sqlite3.connect('test.db')
     cursor = connection.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS products (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,6 +135,7 @@ def find_products_and_images(finalcats: List[str]):
     def check_and_write(text: str, ress, arrs):
         if "/product" in text:
             product_link = "https://basalam.com" + text
+            print(product_link)
             cursor.execute("SELECT COUNT(*) FROM products WHERE product = ?", (product_link,))
             count = cursor.fetchone()[0]
             if count == 0:
@@ -144,10 +149,13 @@ def find_products_and_images(finalcats: List[str]):
                     if img_link.endswith(("_512X512X70.jpg", "_50X50X70.jpg", ".png", "_512X512X70.jpeg", "_50X50X70.jpeg")):
                         product.pass_image(img_link)
                 arrs.append(product)
-                cursor.execute('''INSERT OR IGNORE INTO products (categories, subcategories, final_categories, product, image)
-                                            VALUES (?, ?, ?, ?, ?)''',
-                               (product.categories, product.subcategories, product.final_categories, product.product, ', '.join(product.image)))
-                connection.commit()
+                # print('test1')
+                with lock:
+                    cursor.execute('''INSERT OR IGNORE INTO products (categories, subcategories, final_categories, product, image)
+                                                VALUES (?, ?, ?, ?, ?)''',
+                                   (product.categories, product.subcategories, product.final_categories, product.product, ', '.join(product.image)))
+                    connection.commit()
+                    # print('test2')
 
         if last_row:
             for row in cursor.execute("SELECT * FROM products WHERE id > ? ORDER BY id", (last_row[0],)):
@@ -188,7 +196,19 @@ def find_products_and_images(finalcats: List[str]):
     return final_res
 
 
-category = find_category()
-subcategory = find_subcategory(category)
-finalcat = find_under_subcategory(subcategory)
-find_products_and_images(finalcat)
+def process_category(category):
+    subcategory = find_subcategory(category)
+    finalcat = find_under_subcategory(subcategory)
+    find_products_and_images(finalcat)
+
+categories = find_category()
+
+threads = []
+
+for category in categories:
+    thread = threading.Thread(target=process_category, args=(category,))
+    threads.append(thread)
+    thread.start()
+
+for thread in threads:
+    thread.join()
